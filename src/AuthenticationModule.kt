@@ -1,17 +1,25 @@
 package com.example
 
+import com.toxicbakery.bcrypt.Bcrypt
 import io.ktor.application.*
 import io.ktor.auth.*
 import io.ktor.html.*
-import io.ktor.http.HttpStatusCode.Companion.ResetContent
 import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.sessions.*
 import kotlinx.html.*
 import kotlinx.html.FormMethod.post
 import kotlinx.html.InputType.submit
+import org.jetbrains.exposed.sql.transactions.transaction
 
+@Suppress("unused")
 fun Application.authentication() {
+
+    fun auth(username: String, password: String) = transaction {
+        Login.find { Logins.username eq username }.firstOrNull {
+            Bcrypt.verify(password, it.password.toByteArray())
+        } != null
+    }
 
     install(Sessions) {
         cookie<UserIdPrincipal>("AUTH_COOKIE")
@@ -21,11 +29,7 @@ fun Application.authentication() {
         form("auth") {
             challenge("/login")
             validate { (name, password) ->
-                if(name == "james" && password == "password") {
-                    UserIdPrincipal(name)
-                } else {
-                    null
-                }
+                if(auth(name, password)) UserIdPrincipal(name) else null
             }
         }
 
