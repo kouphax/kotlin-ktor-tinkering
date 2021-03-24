@@ -13,41 +13,8 @@ import kotlinx.html.InputType.submit
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
-fun Application.module() {
-
-    install(Sessions) {
-        cookie<UserIdPrincipal>("AUTH_COOKIE")
-    }
-
-    install(Authentication) {
-        form("auth") {
-            challenge("/login")
-            validate { (name, password) ->
-                if(name == "james" && password == "password") {
-                    UserIdPrincipal(name)
-                } else {
-                    null
-                }
-            }
-        }
-
-        session<UserIdPrincipal> {
-            challenge("/login")
-            validate { session -> session }
-        }
-    }
-
+fun Application.application() {
     routing {
-        authenticate("auth") {
-            route("/login") {
-                post {
-                    val principal = call.principal<UserIdPrincipal>()!!
-                    call.sessions.set(principal)
-                    call.respondRedirect("/")
-                }
-            }
-        }
-
         authenticate {
             route("/") {
                 get {
@@ -62,48 +29,6 @@ fun Application.module() {
                             }
                             a(href = "/logout") {
                                 +"Logout"
-                            }
-                        }
-                    }
-                }
-            }
-
-            route("/logout") {
-                get {
-                    call.sessions.clear<UserIdPrincipal>()
-                    call.respondRedirect("/")
-                }
-            }
-        }
-
-
-        route("/login") {
-            get {
-                call.respondHtml {
-                    head {
-                        title { +"Header" }
-                    }
-                    body {
-                        h1 {
-                            +"Login"
-                        }
-                        div {
-                            form("/login", method = post) {
-                                div {
-                                    label {
-                                        +"Username: "
-                                        input(name = "user")
-                                    }
-                                }
-                                div {
-                                    label {
-                                        +"Password: "
-                                        input(name = "password")
-                                    }
-                                }
-                                div {
-                                    input(submit) { value = "login" }
-                                }
                             }
                         }
                     }
