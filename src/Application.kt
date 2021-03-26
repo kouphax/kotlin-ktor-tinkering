@@ -1,61 +1,74 @@
 package com.example
 
+import com.example.routes.*
 import com.toxicbakery.bcrypt.Bcrypt
 import io.ktor.application.*
 import io.ktor.auth.*
 import io.ktor.features.*
-import io.ktor.html.*
+import io.ktor.http.*
+import io.ktor.request.*
+import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.serialization.*
+import io.ktor.sessions.*
 import io.ktor.util.pipeline.*
-import kotlinx.html.*
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.util.*
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
-fun PipelineContext<Unit, ApplicationCall>.principal(): UserIdPrincipal {
-    return call.principal()!!
-}
 
 @Suppress("unused")
 fun Application.application() {
 
-    Database.connect("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", driver = "org.h2.Driver")
-
-    transaction {
-        SchemaUtils.create(Logins)
-        Login.new {
-            username = "james"
-            password = Bcrypt.hash("password", 12).decodeToString()
-        }
-
-    }
+    initDatabase()
+    initAuth()
 
     install(ContentNegotiation) {
         json()
     }
-
+    
     routing {
         authenticate {
-            route("/") {
-                get {
-                    val user = principal()
-                    call.respondHtml {
-                        head {
-                            title { +"Header" }
-                        }
-                        body {
-                            h1 { +user.name }
-
-                            a(href = "/logout") {
-                                +"Logout"
-                            }
-                        }
-                    }
+            route("/api") {
+                get("/message") {
+                    call.respond(mapOf("message" to UUID.randomUUID().toString()))
                 }
             }
+        }
+
+        logout()
+        loginForm()
+        login()
+    }
+}
+
+fun Application.initAuth() {
+    install(Sessions) {
+        cookie<UserIdPrincipal>("AUTH_COOKIE")
+    }
+
+    install(Authentication) {
+        form("auth") {
+            challenge {
+                call.respond(HttpStatusCode.Forbidden)
+            }
+            validate { (name, password) ->
+                val authenticatedUser = transaction {
+                    Login.find { Logins.username eq name }.firstOrNull {
+                        Bcrypt.verify(password, it.password.toByteArray())
+                    }
+                }
+
+                if (authenticatedUser != null) UserIdPrincipal(name) else null
+            }
+        }
+
+        session<UserIdPrincipal> {
+            challenge {
+                call.respond(HttpStatusCode.Forbidden)
+            }
+            validate { session -> session }
         }
     }
 }
